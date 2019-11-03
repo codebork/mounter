@@ -19,14 +19,14 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Set up udisks2 signal listeners
     let manager_clone = manager.clone();
     proxy.match_signal_local(move |h: udisks2::OrgFreedesktopDBusObjectManagerInterfacesAdded, conn: &Connection| {
-        manager_clone.borrow_mut().interface_added(&h, conn);
+        manager_clone.borrow().interface_added(&h, conn);
 
         true
     }).expect("Could not listen for Interfaces Added signal");
 
     let manager_clone = manager.clone();
     proxy.match_signal_local(move |h: udisks2::OrgFreedesktopDBusObjectManagerInterfacesRemoved, conn: &Connection| {
-        manager_clone.borrow_mut().interface_removed(&h, conn);
+        manager_clone.borrow().interface_removed(&h, conn);
 
         true
     }).expect("Could not listen for Interfaces Removed signal");
@@ -52,6 +52,7 @@ impl Manager {
         /*
         println!("{:#?}", interfaces);
         println!("{}\n", signal.object_path);
+
 
         if interfaces.contains(&&String::from("org.freedesktop.UDisks2.Block")) {
             let value: Vec<u8> = signal.interfaces_and_properties["org.freedesktop.UDisks2.Block"]["Device"].0
