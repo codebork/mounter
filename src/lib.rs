@@ -5,15 +5,33 @@ mod notification;
 use dbus::arg::Variant;
 use std::collections::HashMap;
 use std::str;
-use crate::notification::Notification;
+use notification::Notification;
 mod udisks2;
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let manager = Manager::new();
+    let mut conn = Connection::new_system().expect("Could not connect to system bus");
+    let proxy = conn.with_proxy("org.freedesktop.UDisks2", "/org/freedesktop/UDisks2", Duration::from_millis(5000));
+    let manager = Rc::new(RefCell::new(Manager::new()));
 
-    manager.run();
+    // Set up udisks2 signal listeners
+    let manager_clone = manager.clone();
+    proxy.match_signal_local(move |h: udisks2::OrgFreedesktopDBusObjectManagerInterfacesAdded, conn: &Connection| {
+        manager_clone.borrow_mut().interface_added(&h, conn);
 
-    Ok(())
+        true
+    }).expect("Could not listen for Interfaces Added signal");
+
+    let manager_clone = manager.clone();
+    proxy.match_signal_local(move |h: udisks2::OrgFreedesktopDBusObjectManagerInterfacesRemoved, conn: &Connection| {
+        manager_clone.borrow_mut().interface_removed(&h, conn);
+
+        true
+    }).expect("Could not listen for Interfaces Removed signal");
+
+    loop { conn.process(Duration::from_millis(1000)).expect("Couldn't process"); }
 }
 
 pub struct Manager;
@@ -24,6 +42,7 @@ impl Manager {
     }
 
     pub fn interface_added(
+        &self,
         signal: &udisks2::OrgFreedesktopDBusObjectManagerInterfacesAdded,
         conn: &Connection
     ) {
@@ -52,6 +71,7 @@ impl Manager {
     }
 
     pub fn interface_removed(
+        &self,
         signal: &udisks2::OrgFreedesktopDBusObjectManagerInterfacesRemoved,
         _conn: &Connection
     ) {
@@ -60,24 +80,5 @@ impl Manager {
         if signal.interfaces.contains(&&fs) {
             Notification::unmounted(signal.object_path.to_string()).send();
         }
-
-    }
-
-    pub fn run(&self) {
-        let mut conn = Connection::new_system().expect("Could not connect to system bus");
-        let proxy = conn.with_proxy("org.freedesktop.UDisks2", "/org/freedesktop/UDisks2", Duration::from_millis(5000));
-        proxy.match_signal_local(|h: udisks2::OrgFreedesktopDBusObjectManagerInterfacesAdded, conn: &Connection| {
-            Self::interface_added(&h, conn);
-
-            true
-        }).expect("Could not listen for Interfaces Added signal");
-
-        proxy.match_signal_local(|h: udisks2::OrgFreedesktopDBusObjectManagerInterfacesRemoved, conn: &Connection| {
-            Self::interface_removed(&h, conn);
-
-            true
-        }).expect("Could not listen for Interfaces Removed signal");
-
-        loop { conn.process(Duration::from_millis(1000)).expect("Couldn't process"); }
     }
 }
