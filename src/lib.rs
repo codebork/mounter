@@ -11,7 +11,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let manager_clone = manager.clone();
 
     udisks2_wrapper.new_filesystem(move |filesystem: Filesystem| {
-        manager_clone.borrow().new_fs(filesystem);
+        let manager = manager_clone.borrow();
+        manager.new_fs(&filesystem);
     });
 
     udisks2_wrapper.run()
@@ -21,23 +22,14 @@ pub struct Manager;
 
 impl Manager {
     pub fn new() -> Manager {
-        return Manager;
+        Manager
     }
 
-    pub fn new_fs(&self, filesystem: Filesystem) {
-        Notification::mounted(format!("{}: {}", filesystem.device, filesystem.label.unwrap())).send();
-    }
-
-    /*
-        let fs = String::from("org.freedesktop.UDisks2.Filesystem");
-        if interfaces.contains(&&fs) {
-            let fs_object = conn.with_proxy("org.freedesktop.UDisks2", &signal.object_path, Duration::from_millis(5000));
-            let options: HashMap<String, Variant<&str>> = HashMap::new();
-            println!("{:#?}", signal.interfaces_and_properties);
-
-            let (mount_path,): (String,) = fs_object.method_call("org.freedesktop.UDisks2.Filesystem", "Mount", (options,)).unwrap();
-
-            Notification::mounted(mount_path).send();
+    pub fn new_fs(&self, filesystem: &Filesystem) {
+        if let Some(label) = filesystem.label.as_ref() {
+            Notification::new_filesystem(format!("{}: {}", filesystem.device, label)).send();
+        } else {
+            Notification::new_filesystem(filesystem.device.to_string()).send();
         }
-    }*/
+    }
 }

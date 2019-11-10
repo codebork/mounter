@@ -37,6 +37,14 @@ impl Notification {
         }
     }
     
+    pub fn new_filesystem(body: String) -> Notification {
+        Notification {
+            summary: "New filesystem found".to_string(),
+            body,
+            ..Default::default()
+        }
+    }
+
     pub fn mounted(object_path: String) -> Notification {
         Notification {
             summary: "Filesystem mounted".to_string(),

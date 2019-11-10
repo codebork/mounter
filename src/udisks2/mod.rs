@@ -2,6 +2,8 @@ mod udisks2_dbus;
 use dbus::blocking::Connection;
 use std::time::Duration;
 use std::cell::RefCell;
+use std::collections::HashMap;
+use dbus::arg::Variant;
 
 pub struct Filesystem {
     pub object_path: String,
@@ -20,6 +22,15 @@ impl Udisks2 {
         }
     }
 
+    pub fn mount(filesystem: &Filesystem) -> Result<String, Box<dyn std::error::Error>> {
+        let conn = Connection::new_system().expect("Could not connect to system bus");
+        let proxy = conn.with_proxy("org.freedesktop.UDisks2", &filesystem.object_path, Duration::from_millis(5000));
+        let options: HashMap<String, Variant<&str>> = HashMap::new();
+
+        let (mount_path,): (String,) = proxy.method_call("org.freedesktop.UDisks2.Filesystem", "Mount", (options,))?;
+
+        Ok(mount_path)
+    }
 
     pub fn new_filesystem<F: 'static>(&self, callback: F)
         where F: Fn(Filesystem)
