@@ -45,10 +45,18 @@ impl Notification {
         }
     }
 
-    pub fn mounted(object_path: String) -> Notification {
+    pub fn mounted(object_path: &str) -> Notification {
         Notification {
             summary: "Filesystem mounted".to_string(),
-            body: object_path,
+            body: object_path.to_string(),
+            ..Default::default()
+        }
+    }
+
+    pub fn mount_failed(device: &str) -> Notification {
+        Notification {
+            summary: "Mount failed".to_string(),
+            body: format!("Could not mount {}", device),
             ..Default::default()
         }
     }

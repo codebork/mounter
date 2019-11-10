@@ -11,6 +11,26 @@ pub struct Filesystem {
     pub label: Option<String>
 }
 
+impl Filesystem {
+    pub fn details(&self) -> String {
+        if let Some(label) = &self.label {
+            format!("{}: {}", self.device, label)
+        } else {
+            self.device.to_string()
+        }
+    }
+
+    pub fn mount(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let conn = Connection::new_system().expect("Could not connect to system bus");
+        let proxy = conn.with_proxy("org.freedesktop.UDisks2", &self.object_path, Duration::from_millis(5000));
+        let options: HashMap<String, Variant<&str>> = HashMap::new();
+
+        let (mount_path,): (String,) = proxy.method_call("org.freedesktop.UDisks2.Filesystem", "Mount", (options,))?;
+
+        Ok(mount_path)
+    }
+}
+
 pub struct Udisks2 {
     conn: RefCell<Connection>
 }
@@ -22,17 +42,8 @@ impl Udisks2 {
         }
     }
 
-    pub fn mount(filesystem: &Filesystem) -> Result<String, Box<dyn std::error::Error>> {
-        let conn = Connection::new_system().expect("Could not connect to system bus");
-        let proxy = conn.with_proxy("org.freedesktop.UDisks2", &filesystem.object_path, Duration::from_millis(5000));
-        let options: HashMap<String, Variant<&str>> = HashMap::new();
 
-        let (mount_path,): (String,) = proxy.method_call("org.freedesktop.UDisks2.Filesystem", "Mount", (options,))?;
-
-        Ok(mount_path)
-    }
-
-    pub fn new_filesystem<F: 'static>(&self, callback: F)
+    pub fn filesystem_added<F: 'static>(&self, callback: F)
         where F: Fn(Filesystem)
     {
         let conn = self.conn.borrow();
@@ -56,6 +67,24 @@ impl Udisks2 {
 
             true
         }).expect("Could not listen for Interfaces Added signal");
+
+    }
+
+    pub fn filesystem_removed<F: 'static>(&self, callback: F)
+        where F: Fn(String)
+    {
+        let conn = self.conn.borrow();
+        let proxy = conn.with_proxy("org.freedesktop.UDisks2", "/org/freedesktop/UDisks2", Duration::from_millis(5000));
+
+        proxy.match_signal_local(move |signal: udisks2_dbus::OrgFreedesktopDBusObjectManagerInterfacesRemoved, _conn: &Connection| {
+            let fs_interface = String::from("org.freedesktop.UDisks2.Filesystem");
+
+            if signal.interfaces.contains(&&fs_interface) {
+                callback(signal.object_path.to_string());
+            }
+
+            true
+        }).expect("Could not listen for Interfaces Removed signal");
     }
 
     pub fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
