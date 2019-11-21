@@ -12,13 +12,13 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     let manager_clone = manager.clone();
     udisks2_wrapper.filesystem_added(move |filesystem: Filesystem| {
-        let manager = manager_clone.borrow();
+        let mut manager = manager_clone.borrow_mut();
         manager.new_fs(filesystem);
     });
 
     let manager_clone = manager.clone();
     udisks2_wrapper.filesystem_removed(move |object_path: String| {
-        let manager = manager_clone.borrow();
+        let mut manager = manager_clone.borrow_mut();
         manager.removed_fs(object_path);
     });
 
@@ -26,17 +26,17 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 pub struct Manager {
-    filesystems: RefCell<HashMap<String, Filesystem>>
+    filesystems: HashMap<String, Filesystem>
 }
 
 impl Manager {
     pub fn new() -> Manager {
         Manager {
-            filesystems: RefCell::new(HashMap::new())
+            filesystems: HashMap::new()
         }
     }
 
-    pub fn new_fs(&self, filesystem: Filesystem) {
+    pub fn new_fs(&mut self, filesystem: Filesystem) {
         Notification::new_filesystem(filesystem.details()).send();
 
         if let Ok(mount_path) = &filesystem.mount() {
@@ -45,11 +45,11 @@ impl Manager {
             Notification::mount_failed(&filesystem.device).send();
         }
 
-        self.filesystems.borrow_mut().insert(filesystem.object_path.to_string(), filesystem);
+        self.filesystems.insert(filesystem.object_path.to_string(), filesystem);
     }
 
-    pub fn removed_fs(&self, object_path: String) {
-        if let Some(filesystem) = self.filesystems.borrow_mut().remove(&object_path) {
+    pub fn removed_fs(&mut self, object_path: String) {
+        if let Some(filesystem) = self.filesystems.remove(&object_path) {
             Notification::unmounted(filesystem.device).send();
         }
     }

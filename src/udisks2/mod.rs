@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use dbus::arg::Variant;
 
 pub struct Filesystem {
+    pub uuid: String,
     pub object_path: String,
     pub device: String,
     pub label: Option<String>
@@ -58,6 +59,7 @@ impl Udisks2 {
                 let device: Vec<u8> = signal.interfaces_and_properties["org.freedesktop.UDisks2.Block"]["Device"].0
                     .as_iter().unwrap().map(|r| r.as_u64().unwrap() as u8).collect();
                 let fs = Filesystem {
+                    uuid: signal.interfaces_and_properties["org.freedesktop.UDisks2.Block"]["IdUUID"].0.as_str().unwrap().to_string(),
                     object_path: signal.object_path.to_string(),
                     device: String::from_utf8(device).unwrap().trim_matches(char::from(0)).to_string(),
                     label: Some(label)
