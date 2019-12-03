@@ -47,10 +47,10 @@ impl Config {
         }
     }
 
-    pub fn parse(path: String) -> Self {
+    pub fn parse(path: &Path) -> Self {
         // If the file can be read then parse it otherwise
         // return an empty config file
-        if let Ok(mut file) = File::open(&path) {
+        if let Ok(mut file) = File::open(path) {
             let mut contents = String::new();
 
             // Read config file into string and convert into Config struct
@@ -62,6 +62,10 @@ impl Config {
         }
     }
 }
+
+// TODO
+// Handle encrypted devices
+// Handle devices already connected at start up
 
 pub struct Manager {
     config: Config,
