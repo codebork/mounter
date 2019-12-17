@@ -31,19 +31,39 @@ pub fn run(config: Config) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct FsOptions {
+pub struct FsSettings {
+    automount: Option<bool>,
     command: Option<String>
 }
 
 #[derive(Debug, Deserialize)]
+// Sets all fields to default() values and
+// overwrites ones that are present in toml file
+#[serde(default)]
+pub struct Settings {
+    automount: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            automount: true,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
 pub struct Config {
-    filesystems: HashMap<String, FsOptions>
+    #[serde(default)]
+    settings: Settings,
+    filesystems: Option<HashMap<String, FsSettings>>
 }
 
 impl Config {
     pub fn new() -> Self {
         Config {
-            filesystems: HashMap::new()
+            settings: Settings::default(),
+            filesystems: None
         }
     }
 
@@ -57,7 +77,7 @@ impl Config {
             file.read_to_string(&mut contents).expect("Could not read file");
             toml::from_str(contents.as_str()).unwrap()
         } else {
-            eprintln!("Could not read config file");
+            eprintln!("Could not read config file: {:?}", path);
             Config::new()
         }
     }
@@ -74,25 +94,45 @@ pub struct Manager {
 
 impl Manager {
     pub fn new(config: Config) -> Manager {
+        // println!("{:#?}", config);
         Manager {
             config: config,
             filesystems: HashMap::new()
         }
     }
 
+    fn get_fs_settings(&self, uuid: &str) -> Option<&FsSettings> {
+        self.config.filesystems.as_ref()?.get(uuid)
+    }
+
     pub fn new_fs(&mut self, filesystem: Filesystem) {
         Notification::new_filesystem(filesystem.details()).send();
 
-        if let Ok(mount_path) = &filesystem.mount() {
-            Notification::mounted(&mount_path).send();
-        } else {
-            Notification::mount_failed(&filesystem.device).send();
-        }
+        match self.get_fs_settings(&filesystem.uuid) {
+            Some(filesystem_config) => {
+                let should_mount = filesystem_config.automount.unwrap_or(self.config.settings.automount);
 
-        if let Some(filesystem_config) = self.config.filesystems.get(&filesystem.uuid) {
-            if let Some(command) = &filesystem_config.command {
-                if Path::new(command).exists() {
-                    Command::new(command).output().expect("failed to execute command");
+                if should_mount {
+                    if let Ok(mount_path) = &filesystem.mount() {
+                        Notification::mounted(&mount_path).send();
+
+                        if let Some(command) = &filesystem_config.command {
+                            if Path::new(command).exists() {
+                                Command::new(command).output().expect("failed to execute command");
+                            }
+                        }
+                    } else {
+                        Notification::mount_failed(&filesystem.device).send();
+                    }
+                }
+            },
+            None => {
+                if self.config.settings.automount {
+                    if let Ok(mount_path) = &filesystem.mount() {
+                        Notification::mounted(&mount_path).send();
+                    } else {
+                        Notification::mount_failed(&filesystem.device).send();
+                    }
                 }
             }
         }
