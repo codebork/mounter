@@ -1,7 +1,7 @@
 mod notification;
 use notification::Notification;
 mod udisks2;
-use udisks2::{Udisks2, Filesystem};
+use udisks2::{Udisks2, Filesystem, Udisks2ManagedObjects};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::collections::HashMap;
@@ -12,8 +12,10 @@ use std::io::prelude::*;
 use serde::Deserialize;
 
 pub fn run(config: Config) -> Result<(), Box<dyn std::error::Error>> {
-    let manager = Rc::new(RefCell::new(Manager::new(config)));
     let udisks2_wrapper = Udisks2::new();
+    let manager = Rc::new(RefCell::new(Manager::new(config, Some(udisks2_wrapper.current_state()))));
+
+    udisks2_wrapper.current_state();
 
     let manager_clone = manager.clone();
     udisks2_wrapper.filesystem_added(move |filesystem: Filesystem| {
@@ -93,16 +95,33 @@ pub struct Manager {
 }
 
 impl Manager {
-    pub fn new(config: Config) -> Manager {
-        // println!("{:#?}", config);
-        Manager {
+    pub fn new(config: Config, initial_state: Option<Udisks2ManagedObjects>) -> Manager {
+        let mut new_manager = Manager {
             config: config,
             filesystems: HashMap::new()
-        }
+        };
+
+        if let Some(initial_state) = initial_state {
+            new_manager.parse_initial_udisks2_state(initial_state);
+        };
+
+        new_manager
     }
 
     fn get_fs_settings(&self, uuid: &str) -> Option<&FsSettings> {
         self.config.filesystems.as_ref()?.get(uuid)
+    }
+
+    fn parse_initial_udisks2_state(&mut self, initial_state: Udisks2ManagedObjects) {
+        for (object_path, interfaces_and_properties) in initial_state.iter() {
+            let fs_interface = String::from("org.freedesktop.UDisks2.Filesystem");
+
+            for interface in interfaces_and_properties.keys() {
+                if interface == &fs_interface {
+                    self.new_fs(Filesystem::new(object_path, interfaces_and_properties));
+                }
+            }
+        }
     }
 
     pub fn new_fs(&mut self, filesystem: Filesystem) {
