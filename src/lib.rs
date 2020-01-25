@@ -1,104 +1,45 @@
 mod notification;
-use notification::Notification;
 mod udisks2;
-use udisks2::{Udisks2, Filesystem, Udisks2ManagedObjects};
-use std::cell::RefCell;
-use std::rc::Rc;
+use udisks2::{Udisks2ManagedObjects, block_devices};
 use std::collections::HashMap;
-use std::path::Path;
-use std::process::Command;
-use std::fs::File;
-use std::io::prelude::*;
-use serde::Deserialize;
+mod config;
+pub use config::Config;
+
 
 pub fn run(config: Config) -> Result<(), Box<dyn std::error::Error>> {
-    let udisks2_wrapper = Udisks2::new();
-    let manager = Rc::new(RefCell::new(Manager::new(config, Some(udisks2_wrapper.current_state()))));
-
-    udisks2_wrapper.current_state();
+    let udisks2_listener = udisks2::Listener::new();
+    let manager = std::rc::Rc::new(std::cell::RefCell::new(Manager::new(config, Some(udisks2::current_state()))));
 
     let manager_clone = manager.clone();
-    udisks2_wrapper.filesystem_added(move |filesystem: Filesystem| {
+    udisks2_listener.block_device_added(move |block_device: block_devices::Block| {
         let mut manager = manager_clone.borrow_mut();
-        manager.new_fs(filesystem);
+        manager.new_device(block_device);
     });
 
     let manager_clone = manager.clone();
-    udisks2_wrapper.filesystem_removed(move |object_path: String| {
+    udisks2_listener.block_device_removed(move |object_path: String| {
         let mut manager = manager_clone.borrow_mut();
-        manager.removed_fs(object_path);
+        manager.removed_device(object_path);
     });
 
-    udisks2_wrapper.run()
+    udisks2_listener.run()
 }
 
-#[derive(Debug, Deserialize)]
-pub struct FsSettings {
-    automount: Option<bool>,
-    command: Option<String>
-}
-
-#[derive(Debug, Deserialize)]
-// Sets all fields to default() values and
-// overwrites ones that are present in toml file
-#[serde(default)]
-pub struct Settings {
-    automount: bool,
-}
-
-impl Default for Settings {
-    fn default() -> Self {
-        Self {
-            automount: true,
-        }
-    }
-}
-
-#[derive(Debug, Deserialize)]
-pub struct Config {
-    #[serde(default)]
-    settings: Settings,
-    filesystems: Option<HashMap<String, FsSettings>>
-}
-
-impl Config {
-    pub fn new() -> Self {
-        Config {
-            settings: Settings::default(),
-            filesystems: None
-        }
-    }
-
-    pub fn parse(path: &Path) -> Self {
-        // If the file can be read then parse it otherwise
-        // return an empty config file
-        if let Ok(mut file) = File::open(path) {
-            let mut contents = String::new();
-
-            // Read config file into string and convert into Config struct
-            file.read_to_string(&mut contents).expect("Could not read file");
-            toml::from_str(contents.as_str()).unwrap()
-        } else {
-            eprintln!("Could not read config file: {:?}", path);
-            Config::new()
-        }
-    }
-}
 
 // TODO
-// Handle encrypted devices
-// Handle devices already connected at start up
+// Password input for encrypted devices
+// Run on removable drives only
 
 pub struct Manager {
     config: Config,
-    filesystems: HashMap<String, Filesystem>
+    devices: HashMap<String, block_devices::Block>
 }
 
 impl Manager {
     pub fn new(config: Config, initial_state: Option<Udisks2ManagedObjects>) -> Manager {
         let mut new_manager = Manager {
             config: config,
-            filesystems: HashMap::new()
+            devices: HashMap::new()
         };
 
         if let Some(initial_state) = initial_state {
@@ -108,60 +49,78 @@ impl Manager {
         new_manager
     }
 
-    fn get_fs_settings(&self, uuid: &str) -> Option<&FsSettings> {
-        self.config.filesystems.as_ref()?.get(uuid)
-    }
-
     fn parse_initial_udisks2_state(&mut self, initial_state: Udisks2ManagedObjects) {
         for (object_path, interfaces_and_properties) in initial_state.iter() {
-            let fs_interface = String::from("org.freedesktop.UDisks2.Filesystem");
-
-            for interface in interfaces_and_properties.keys() {
-                if interface == &fs_interface {
-                    self.new_fs(Filesystem::new(object_path, interfaces_and_properties));
-                }
+            if let Some(block_device) = block_devices::get(&object_path, &interfaces_and_properties) {
+                self.new_device(block_device);
             }
         }
     }
 
-    pub fn new_fs(&mut self, filesystem: Filesystem) {
-        Notification::new_filesystem(filesystem.details()).send();
+    fn store_block_device(&mut self, device: &block_devices::Block) {
+        self.devices.insert(device.object_path.to_string(), device.to_owned());
+    }
 
-        match self.get_fs_settings(&filesystem.uuid) {
+    pub fn new_device(&mut self, device: block_devices::Block) {
+        self.store_block_device(&device);
+
+        if device.has_interface(block_devices::Interface::Filesystem) {
+            self.new_filesystem(device.as_fs());
+        }
+
+        if device.has_interface(block_devices::Interface::Encrypted) {
+            self.new_encrypted(device.as_enc());
+        }
+    }
+
+    fn new_encrypted(&mut self, encrypted: udisks2::Encrypted) {
+        match encrypted.unlock("".to_string()) {
+            Ok(path) => println!("Cleartext: {}", path),
+            Err(e) => eprintln!("{:#?}", e)
+        }
+    }
+
+    fn new_filesystem(&mut self, filesystem: udisks2::Filesystem) {
+        notification::new_filesystem(&filesystem.device.device).send();
+
+        match self.config.get_fs_settings(&filesystem.device.uuid.as_ref().unwrap()) {
             Some(filesystem_config) => {
                 let should_mount = filesystem_config.automount.unwrap_or(self.config.settings.automount);
 
                 if should_mount {
-                    if let Ok(mount_path) = &filesystem.mount() {
-                        Notification::mounted(&mount_path).send();
+                    match filesystem.mount() {
+                        Ok(mount_path) => {
+                            notification::mounted(&mount_path).send();
 
-                        if let Some(command) = &filesystem_config.command {
-                            if Path::new(command).exists() {
-                                Command::new(command).output().expect("failed to execute command");
+                            if let Some(command) = &filesystem_config.command {
+                                if std::path::Path::new(command).exists() {
+                                    std::process::Command::new(command).output().expect("failed to execute command");
+                                }
                             }
+                        },
+                        Err(e) => {
+                            eprintln!("{:#?}", e);
+                            notification::mount_failed(&filesystem.device.device).send();
                         }
-                    } else {
-                        Notification::mount_failed(&filesystem.device).send();
                     }
                 }
             },
             None => {
                 if self.config.settings.automount {
-                    if let Ok(mount_path) = &filesystem.mount() {
-                        Notification::mounted(&mount_path).send();
+                    if let Ok(mount_path) = filesystem.mount() {
+                        notification::mounted(&mount_path).send();
                     } else {
-                        Notification::mount_failed(&filesystem.device).send();
+                        notification::mount_failed(&filesystem.device.uuid.unwrap_or_default()).send();
                     }
                 }
             }
         }
 
-        self.filesystems.insert(filesystem.object_path.to_string(), filesystem);
     }
 
-    pub fn removed_fs(&mut self, object_path: String) {
-        if let Some(filesystem) = self.filesystems.remove(&object_path) {
-            Notification::unmounted(filesystem.device).send();
+    pub fn removed_device(&mut self, object_path: String) {
+        if let Some(filesystem) = self.devices.remove(&object_path) {
+            notification::unmounted(&filesystem.device).send();
         }
     }
 }

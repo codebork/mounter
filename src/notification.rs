@@ -31,44 +31,6 @@ impl Default for Notification {
 }
 
 impl Notification {
-    pub fn new() -> Notification {
-        Notification {
-            ..Default::default()
-        }
-    }
-    
-    pub fn new_filesystem(body: String) -> Notification {
-        Notification {
-            summary: "New filesystem found".to_string(),
-            body,
-            ..Default::default()
-        }
-    }
-
-    pub fn mounted(object_path: &str) -> Notification {
-        Notification {
-            summary: "Filesystem mounted".to_string(),
-            body: object_path.to_string(),
-            ..Default::default()
-        }
-    }
-
-    pub fn mount_failed(device: &str) -> Notification {
-        Notification {
-            summary: "Mount failed".to_string(),
-            body: format!("Could not mount {}", device),
-            ..Default::default()
-        }
-    }
-    
-    pub fn unmounted(object_path: String) -> Notification {
-        Notification {
-            summary: "Filesystem unmounted".to_string(),
-            body: object_path,
-            ..Default::default()
-        }
-    }
-
     pub fn send(&self) -> u32 {
         let conn = Connection::new_session().expect("Could not connect to session bus");
         let notifier = conn.with_proxy(
@@ -95,3 +57,36 @@ impl Notification {
         notification_id
     }
 }
+
+pub fn new_filesystem(body: &str) -> Notification {
+    Notification {
+        summary: "New filesystem found".to_string(),
+        body: body.to_string(),
+        ..Default::default()
+    }
+}
+
+pub fn mounted(object_path: &str) -> Notification {
+    Notification {
+        summary: "Filesystem mounted".to_string(),
+        body: object_path.to_string(),
+        ..Default::default()
+    }
+}
+
+pub fn mount_failed(device: &str) -> Notification {
+    Notification {
+        summary: "Mount failed".to_string(),
+        body: format!("Could not mount {}", device),
+        ..Default::default()
+    }
+}
+
+pub fn unmounted(object_path: &str) -> Notification {
+    Notification {
+        summary: "Filesystem unmounted".to_string(),
+        body: object_path.to_string(),
+        ..Default::default()
+    }
+}
+

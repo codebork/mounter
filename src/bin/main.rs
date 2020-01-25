@@ -1,9 +1,8 @@
 use std::process;
-use mounter;
-use mounter::Config;
 use std::env;
 use std::path::Path;
 extern crate xdg;
+use mounter;
 
 fn main() {
     let xdg_dirs = xdg::BaseDirectories::with_prefix("mounter").unwrap();
@@ -12,10 +11,10 @@ fn main() {
     args.next();
 
     let config = match args.next() {
-        Some(config_file) => Config::parse(Path::new(&config_file)),
+        Some(config_file) => mounter::Config::parse(Path::new(&config_file)),
         None => match xdg_dirs.find_config_file("config.toml") {
-            Some(config_file) => Config::parse(&config_file),
-            None => Config::new()
+            Some(config_file) => mounter::Config::parse(&config_file),
+            None => mounter::Config::new()
         }
     };
 
