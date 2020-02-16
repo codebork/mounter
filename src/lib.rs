@@ -1,44 +1,51 @@
 mod notification;
 mod udisks2;
-use udisks2::{Udisks2ManagedObjects, block_devices};
+use udisks2::{Udisks2ManagedObjects, Block, Drive};
 use std::collections::HashMap;
 mod config;
 pub use config::Config;
 
-
 pub fn run(config: Config) -> Result<(), Box<dyn std::error::Error>> {
-    let udisks2_listener = udisks2::Listener::new();
+    let mut udisks2_listener = udisks2::Listener::new();
     let manager = std::rc::Rc::new(std::cell::RefCell::new(Manager::new(config, Some(udisks2::current_state()))));
 
     let manager_clone = manager.clone();
-    udisks2_listener.block_device_added(move |block_device: block_devices::Block| {
+    udisks2_listener.drive_added(move |drive: Drive| {
+        let mut manager = manager_clone.borrow_mut();
+        manager.new_drive(drive);
+    });
+
+    let manager_clone = manager.clone();
+    udisks2_listener.block_device_added(move |block_device: Block| {
         let mut manager = manager_clone.borrow_mut();
         manager.new_device(block_device);
     });
 
     let manager_clone = manager.clone();
-    udisks2_listener.block_device_removed(move |object_path: String| {
+    udisks2_listener.object_removed(move |object_path: String| {
         let mut manager = manager_clone.borrow_mut();
-        manager.removed_device(object_path);
+        manager.removed_object(object_path);
     });
 
     udisks2_listener.run()
 }
 
-
 // TODO
-// Password input for encrypted devices
-// Run on removable drives only
+// Password/key file input for encrypted devices
+// Add check for if filesystem was mounted before issuing unmounted notification
 
+#[derive(Debug)]
 pub struct Manager {
     config: Config,
-    devices: HashMap<String, block_devices::Block>
+    drives: HashMap<String, Drive>,
+    devices: HashMap<String, Block>
 }
 
 impl Manager {
     pub fn new(config: Config, initial_state: Option<Udisks2ManagedObjects>) -> Manager {
         let mut new_manager = Manager {
             config: config,
+            drives: HashMap::new(),
             devices: HashMap::new()
         };
 
@@ -50,26 +57,41 @@ impl Manager {
     }
 
     fn parse_initial_udisks2_state(&mut self, initial_state: Udisks2ManagedObjects) {
+        let mut drives: Vec<Drive> = Vec::new();
+        let mut devices: Vec<Block> = Vec::new();
+
         for (object_path, interfaces_and_properties) in initial_state.iter() {
-            if let Some(block_device) = block_devices::get(&object_path, &interfaces_and_properties) {
-                self.new_device(block_device);
+            if let Some(drive) = Drive::new(&object_path, &interfaces_and_properties) {
+                drives.push(drive);
+            }
+
+            if let Some(block_device) = Block::new(&object_path, &interfaces_and_properties) {
+                devices.push(block_device);
             }
         }
-    }
 
-    fn store_block_device(&mut self, device: &block_devices::Block) {
-        self.devices.insert(device.object_path.to_string(), device.to_owned());
-    }
-
-    pub fn new_device(&mut self, device: block_devices::Block) {
-        self.store_block_device(&device);
-
-        if device.has_interface(block_devices::Interface::Filesystem) {
-            self.new_filesystem(device.as_fs());
+        for drive in drives {
+            self.new_drive(drive);
         }
 
-        if device.has_interface(block_devices::Interface::Encrypted) {
-            self.new_encrypted(device.as_enc());
+        for device in devices {
+            self.new_device(device);
+        }
+    }
+
+    pub fn new_drive(&mut self, drive: Drive) {
+        self.drives.insert(drive.object_path.to_string(), drive.to_owned());
+    }
+
+    pub fn new_device(&mut self, device: Block) {
+        self.devices.insert(device.object_path.to_string(), device.to_owned());
+
+        if let Some(filesystem) = device.as_fs() {
+            self.new_filesystem(filesystem);
+        }
+
+        if let Some(encrypted) = device.as_enc() {
+            self.new_encrypted(encrypted);
         }
     }
 
@@ -81,6 +103,15 @@ impl Manager {
     }
 
     fn new_filesystem(&mut self, filesystem: udisks2::Filesystem) {
+        if let Some(drive) = self.drives.get(filesystem.device.drive.as_ref().unwrap()) {
+            if !drive.removable {
+                return
+            }
+        } else {
+            println!("No drive");
+            return
+        }
+
         notification::new_filesystem(&filesystem.device.device).send();
 
         match self.config.get_fs_settings(&filesystem.device.uuid.as_ref().unwrap()) {
@@ -118,9 +149,11 @@ impl Manager {
 
     }
 
-    pub fn removed_device(&mut self, object_path: String) {
-        if let Some(filesystem) = self.devices.remove(&object_path) {
-            notification::unmounted(&filesystem.device).send();
+    pub fn removed_object(&mut self, object_path: String) {
+        if let Some(device) = self.devices.remove(&object_path) {
+            if let Some(filesystem) = device.as_fs() {
+                notification::unmounted(&filesystem.device.device).send();
+            }
         }
     }
 }

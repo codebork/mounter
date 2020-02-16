@@ -19,7 +19,8 @@ pub struct Block {
     pub symlinks: Option<Vec<String>>,
     pub device_number: Option<u64>,
     pub label: Option<String>,
-    pub fs_info: Option<FsInfo>
+    pub fs_info: Option<FsInfo>,
+    pub drive: Option<String>
 }
 
 /*
@@ -44,16 +45,68 @@ pub struct Block {
  */
 
 impl Block {
+    pub fn new(object_path: &Path<'static>, interfaces_and_properties: &Udisks2InterfacesAndProps) -> Option<Self> {
+        if let Some(block_interface) = interfaces_and_properties.get("org.freedesktop.UDisks2.Block") {
+            let mut block = Self {
+                object_path: object_path.to_owned(),
+                ..Default::default()
+            };
+
+            for (key, value) in block_interface {
+                match key.as_str() {
+                    "IdUUID" => block.uuid = get_string(value),
+                    "IdLabel" => block.label = get_string(value),
+                    "Device" => block.device = get_byte_string(value)?,
+                    "PreferredDevice" => block.preferred_device = get_byte_string(value)?,
+                    "Symlinks" => block.symlinks = get_byte_strings(value),
+                    "DeviceNumber" => block.device_number = get_u64(value),
+                    "Drive" => block.drive = get_string(value),
+                    _ => ()
+                }
+            }
+
+            if let Some(fs_interface) = interfaces_and_properties.get("org.freedesktop.UDisks2.Filesystem") {
+                let mut fs = FsInfo::default();
+
+                for (key, value) in fs_interface {
+                    match key.as_str() {
+                        "MountPoints" => fs.mount_paths = get_byte_strings(value),
+                        _ => ()
+                    }
+                }
+
+                block.fs_info = Some(fs);
+                block.interfaces.push(Interface::Filesystem);
+            } 
+
+            if interfaces_and_properties.contains_key("org.freedesktop.UDisks2.Encrypted") {
+                block.interfaces.push(Interface::Encrypted)
+            } 
+
+            Some(block)
+        } else {
+            None
+        }
+    }
+
     pub fn has_interface(&self, interface: Interface) -> bool {
         self.interfaces.contains(&interface)
     }
 
-    pub fn as_fs(&self) -> Filesystem {
-        Filesystem { device: self.to_owned() }
+    pub fn as_fs(&self) -> Option<Filesystem> {
+        if self.has_interface(Interface::Filesystem) {
+            Some(Filesystem { device: self.to_owned() })
+        } else {
+            None
+        }
     }
 
-    pub fn as_enc(&self) -> Encrypted {
-        Encrypted { device: self.to_owned() }
+    pub fn as_enc(&self) -> Option<Encrypted> {
+        if self.has_interface(Interface::Encrypted) {
+            Some(Encrypted { device: self.to_owned() })
+        } else {
+            None
+        }
     }
 }
 
@@ -62,48 +115,6 @@ pub struct FsInfo {
     pub mount_paths: Option<Vec<String>>
 }
 
-pub fn get(object_path: &Path<'static>, interfaces_and_properties: &Udisks2InterfacesAndProps) -> Option<Block> {
-    if let Some(block_interface) = interfaces_and_properties.get("org.freedesktop.UDisks2.Block") {
-        let mut block = Block {
-            object_path: object_path.to_owned(),
-            ..Default::default()
-        };
-
-        for (key, value) in block_interface {
-            match key.as_str() {
-                "IdUUID" => block.uuid = get_string(value),
-                "IdLabel" => block.label = get_string(value),
-                "Device" => block.device = get_byte_string(value)?,
-                "PreferredDevice" => block.preferred_device = get_byte_string(value)?,
-                "Symlinks" => block.symlinks = get_byte_strings(value),
-                "DeviceNumber" => block.device_number = get_u64(value),
-                _ => ()
-            }
-        }
-
-        if let Some(fs_interface) = interfaces_and_properties.get("org.freedesktop.UDisks2.Filesystem") {
-            let mut fs = FsInfo::default();
-
-            for (key, value) in fs_interface {
-                match key.as_str() {
-                    "MountPoints" => fs.mount_paths = get_byte_strings(value),
-                    _ => ()
-                }
-            }
-
-            block.fs_info = Some(fs);
-            block.interfaces.push(Interface::Filesystem);
-        } 
-
-        if interfaces_and_properties.contains_key("org.freedesktop.UDisks2.Encrypted") {
-            block.interfaces.push(Interface::Encrypted)
-        } 
-
-        Some(block)
-    } else {
-        None
-    }
-}
 
 fn get_byte_strings(arg: &Variant<Box<dyn RefArg>>) -> Option<Vec<String>> {
     arg.0.as_iter().and_then(|t| {

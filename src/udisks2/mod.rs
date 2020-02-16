@@ -5,9 +5,13 @@ use std::collections::HashMap;
 use dbus::arg::{RefArg, Variant};
 use dbus::strings::Path;
 use udisks2_dbus::OrgFreedesktopDBusObjectManager;
-pub mod block_devices;
+mod block;
+mod drive;
 mod listener;
+
 pub use listener::Listener;
+pub use block::Block;
+pub use drive::Drive;
 
 pub type Udisks2InterfacesAndProps = HashMap<String, HashMap<String, Variant<std::boxed::Box<(dyn RefArg + 'static)>>>>;
 pub type Udisks2ManagedObjects = HashMap<Path<'static>, Udisks2InterfacesAndProps>;
@@ -19,8 +23,9 @@ pub fn current_state() -> Udisks2ManagedObjects {
     proxy.get_managed_objects().unwrap()
 }
 
+
 pub struct Filesystem {
-    pub device: block_devices::Block,
+    pub device: block::Block,
 }
 
 impl Filesystem {
@@ -41,7 +46,7 @@ impl Filesystem {
 }
 
 pub struct Encrypted {
-    pub device: block_devices::Block
+    pub device: block::Block
 }
 
 impl Encrypted {
