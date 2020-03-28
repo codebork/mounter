@@ -30,10 +30,6 @@ pub fn run(config: Config) -> Result<(), Box<dyn std::error::Error>> {
     udisks2_listener.run()
 }
 
-// TODO
-// Password/key file input for encrypted devices
-// Add check for if filesystem was mounted before issuing unmounted notification
-
 #[derive(Debug)]
 pub struct Manager {
     config: Config,

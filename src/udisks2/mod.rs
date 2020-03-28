@@ -23,6 +23,11 @@ pub fn current_state() -> Udisks2ManagedObjects {
     proxy.get_managed_objects().unwrap()
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum Interface {
+    Filesystem,
+    Encrypted
+}
 
 pub struct Filesystem {
     pub device: block::Block,
