@@ -8,19 +8,19 @@ use std::path::Path;
 pub struct Config {
     #[serde(default)]
     pub settings: Settings,
-    filesystems: Option<HashMap<String, FsSettings>>
+    uuid: Option<HashMap<String, FsSettings>>
 }
 
 impl Config {
     pub fn new() -> Self {
         Config {
             settings: Settings::default(),
-            filesystems: None
+            uuid: None
         }
     }
 
-    pub fn get_fs_settings(&self, uuid: &str) -> Option<&FsSettings> {
-        self.filesystems.as_ref()?.get(uuid)
+    pub fn get_uuid_settings(&self, uuid: &str) -> Option<&FsSettings> {
+        self.uuid.as_ref()?.get(uuid)
     }
 
     pub fn parse(path: &Path) -> Self {
@@ -59,5 +59,7 @@ impl Default for Settings {
 #[derive(Debug, Deserialize)]
 pub struct FsSettings {
     pub automount: Option<bool>,
-    pub command: Option<String>
+    pub command: Option<String>,
+    pub password: Option<String>,
+    pub keyfile: Option<String>
 }

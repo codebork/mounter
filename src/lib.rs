@@ -1,5 +1,6 @@
 mod notification;
 mod udisks2;
+mod err;
 use udisks2::{Udisks2ManagedObjects, Block, Drive};
 use std::collections::HashMap;
 mod config;
@@ -92,25 +93,44 @@ impl Manager {
     }
 
     fn new_encrypted(&mut self, encrypted: udisks2::Encrypted) {
-        match encrypted.unlock("".to_string()) {
-            Ok(path) => println!("Cleartext: {}", path),
-            Err(e) => eprintln!("{:#?}", e)
+        // Don't unlock if the device is already decrypted
+        if let Some(enc_info) = &encrypted.device.enc_info {
+            if enc_info.cleartext_device.is_some() {
+                return;
+            }
+        }
+
+        notification::new_encrypted(&encrypted.device.device).send();
+
+        if let Some(encrypted_config) = self.config.get_uuid_settings(&encrypted.device.uuid.as_ref().unwrap()) {
+            match encrypted.unlock(&encrypted_config.keyfile, &encrypted_config.password) {
+                Ok(path) => {notification::decrypted(&path).send();},
+                Err(e) => {
+                    eprintln!("{}", e);
+                    notification::decryption_failed(&e.to_string()).send();
+                }
+            }
         }
     }
 
     fn new_filesystem(&mut self, filesystem: udisks2::Filesystem) {
+        // Don't do anything if the drive isn't removable
         if let Some(drive) = self.drives.get(filesystem.device.drive.as_ref().unwrap()) {
             if !drive.removable {
-                return
+                return;
             }
-        } else {
-            println!("No drive");
-            return
+        }
+
+        // Don't alert and mount if it's already mounted
+        if let Some(fs_info) = &filesystem.device.fs_info {
+            if fs_info.mount_paths.is_some() {
+                return;
+            }
         }
 
         notification::new_filesystem(&filesystem.device.device).send();
 
-        match self.config.get_fs_settings(&filesystem.device.uuid.as_ref().unwrap()) {
+        match self.config.get_uuid_settings(&filesystem.device.uuid.as_ref().unwrap()) {
             Some(filesystem_config) => {
                 let should_mount = filesystem_config.automount.unwrap_or(self.config.settings.automount);
 
@@ -142,7 +162,6 @@ impl Manager {
                 }
             }
         }
-
     }
 
     pub fn removed_object(&mut self, object_path: String) {

@@ -8,10 +8,12 @@ use udisks2_dbus::OrgFreedesktopDBusObjectManager;
 mod block;
 mod drive;
 mod listener;
+mod encrypted;
 
 pub use listener::Listener;
 pub use block::Block;
 pub use drive::Drive;
+pub use encrypted::Encrypted;
 
 pub type Udisks2InterfacesAndProps = HashMap<String, HashMap<String, Variant<std::boxed::Box<(dyn RefArg + 'static)>>>>;
 pub type Udisks2ManagedObjects = HashMap<Path<'static>, Udisks2InterfacesAndProps>;
@@ -50,18 +52,3 @@ impl Filesystem {
     }
 }
 
-pub struct Encrypted {
-    pub device: block::Block
-}
-
-impl Encrypted {
-    pub fn unlock(&self, password: String) -> Result<String, Box<dyn std::error::Error>> {
-        let conn = Connection::new_system().expect("Could not connect to system bus");
-        let proxy = conn.with_proxy("org.freedesktop.UDisks2", &self.device.object_path, std::time::Duration::from_millis(5000));
-        let options: HashMap<String, Variant<&str>> = HashMap::new();
-
-        let (mount_path,): (Path,) = proxy.method_call("org.freedesktop.UDisks2.Encrypted", "Unlock", (password, options,))?;
-
-        Ok(mount_path.to_string())
-    }
-}

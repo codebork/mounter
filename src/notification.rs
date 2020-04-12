@@ -1,9 +1,10 @@
 use dbus::blocking::Connection;
-use dbus::arg::{Array, Dict, Variant};
+use dbus::arg::Variant;
 use std::time::Duration;
 use std::collections::HashMap;
 use std::vec::Vec;
 
+#[derive(Debug, Default)]
 pub struct Notification {
     app_name: String,
     replaces_id: u32,
@@ -13,21 +14,6 @@ pub struct Notification {
     actions: Vec<String>,
     hints: HashMap<String, Variant<String>>,
     expire_timeout: i32
-}
-
-impl Default for Notification {
-    fn default() -> Notification {
-        Notification {
-            app_name: "mounter".to_string(),
-            replaces_id: 0,
-            app_icon: "".to_string(),
-            summary: "".to_string(),
-            body: "".to_string(),
-            actions: vec!["".to_string()],
-            hints: HashMap::new(),
-            expire_timeout: -1
-        }
-    }
 }
 
 impl Notification {
@@ -48,8 +34,8 @@ impl Notification {
                 &self.app_icon,
                 &self.summary,
                 &self.body,
-                Array::new(&self.actions),
-                Dict::new(&self.hints),
+                &self.actions,
+                &self.hints,
                 &self.expire_timeout
             )
         ).expect("Could not send notification");
@@ -66,18 +52,18 @@ pub fn new_filesystem(body: &str) -> Notification {
     }
 }
 
-pub fn mounted(object_path: &str) -> Notification {
+pub fn new_encrypted(body: &str) -> Notification {
     Notification {
-        summary: "Filesystem mounted".to_string(),
-        body: object_path.to_string(),
+        summary: "New encrypted device found".to_string(),
+        body: body.to_string(),
         ..Default::default()
     }
 }
 
-pub fn mount_failed(device: &str) -> Notification {
+pub fn mounted(object_path: &str) -> Notification {
     Notification {
-        summary: "Mount failed".to_string(),
-        body: format!("Could not mount {}", device),
+        summary: "Filesystem mounted".to_string(),
+        body: object_path.to_string(),
         ..Default::default()
     }
 }
@@ -90,3 +76,26 @@ pub fn unmounted(object_path: &str) -> Notification {
     }
 }
 
+pub fn decrypted(object_path: &str) -> Notification {
+    Notification {
+        summary: "Device decrypted".to_string(),
+        body: format!("Cleartext device: {}", object_path),
+        ..Default::default()
+    }
+}
+
+pub fn mount_failed(device: &str) -> Notification {
+    Notification {
+        summary: "Mount failed".to_string(),
+        body: format!("Could not mount {}", device),
+        ..Default::default()
+    }
+}
+
+pub fn decryption_failed(device: &str) -> Notification {
+    Notification {
+        summary: "Encrypted device error".to_string(),
+        body: device.to_string(),
+        ..Default::default()
+    }
+}

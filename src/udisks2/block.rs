@@ -15,7 +15,9 @@ pub struct Block {
     pub device_number: Option<u64>,
     pub label: Option<String>,
     pub fs_info: Option<FsInfo>,
-    pub drive: Option<String>
+    pub enc_info: Option<EncInfo>,
+    pub drive: Option<String>,
+    pub crypto_backing_device: Option<String>
 }
 
 /*
@@ -56,6 +58,7 @@ impl Block {
                     "Symlinks" => block.symlinks = get_byte_strings(value),
                     "DeviceNumber" => block.device_number = get_u64(value),
                     "Drive" => block.drive = get_string(value),
+                    "CryptoBackingDevice" => block.crypto_backing_device = get_string(value),
                     _ => ()
                 }
             }
@@ -74,7 +77,19 @@ impl Block {
                 block.interfaces.push(Interface::Filesystem);
             } 
 
-            if interfaces_and_properties.contains_key("org.freedesktop.UDisks2.Encrypted") {
+            if let Some(enc_interface) = interfaces_and_properties.get("org.freedesktop.UDisks2.Encrypted") {
+                let mut enc = EncInfo::default();
+
+                for (key, value) in enc_interface {
+                    match key.as_str() {
+                        "CleartextDevice" => {
+                            enc.cleartext_device = get_string(value).and_then(|s| {if s == "/" { None } else { Some(s) }})
+                        },
+                        _ => ()
+                    }
+                }
+
+                block.enc_info = Some(enc);
                 block.interfaces.push(Interface::Encrypted)
             } 
 
@@ -110,6 +125,10 @@ pub struct FsInfo {
     pub mount_paths: Option<Vec<String>>
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct EncInfo {
+    pub cleartext_device: Option<String>
+}
 
 fn get_byte_strings(arg: &Variant<Box<dyn RefArg>>) -> Option<Vec<String>> {
     arg.0.as_iter().and_then(|t| {
