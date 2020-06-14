@@ -9,6 +9,8 @@ mod block;
 mod drive;
 mod listener;
 mod encrypted;
+mod filesystem_dbus;
+use crate::udisks2::filesystem_dbus::UDisks2Filesystem;
 
 pub use listener::Listener;
 pub use block::Block;
@@ -36,7 +38,7 @@ pub struct Filesystem {
 }
 
 impl Filesystem {
-    pub fn mount(&self) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn mount(&self) -> Result<String, dbus::Error> {
         if let Some(info) = &self.device.fs_info {
             if let Some(mount_paths) = &info.mount_paths {
                 return Ok(mount_paths[0].to_owned())
@@ -44,11 +46,9 @@ impl Filesystem {
         }
         let conn = Connection::new_system().expect("Could not connect to system bus");
         let proxy = conn.with_proxy("org.freedesktop.UDisks2", &self.device.object_path, std::time::Duration::from_millis(5000));
-        let options: HashMap<String, Variant<&str>> = HashMap::new();
+        let options: HashMap<&str, Variant<std::boxed::Box<(dyn RefArg + 'static)>>> = HashMap::new();
 
-        let (mount_path,): (String,) = proxy.method_call("org.freedesktop.UDisks2.Filesystem", "Mount", (options,))?;
-
-        Ok(mount_path)
+        proxy.mount(options)
     }
 }
 

@@ -1,10 +1,13 @@
-mod notification;
+mod notifications;
 mod udisks2;
 mod err;
 use udisks2::{Udisks2ManagedObjects, Block, Drive};
 use std::collections::HashMap;
 mod config;
 pub use config::Config;
+use notifications::{Notifier};
+mod notices;
+use notices::Notice;
 
 pub fn run(config: Config) -> Result<(), Box<dyn std::error::Error>> {
     let mut udisks2_listener = udisks2::Listener::new();
@@ -100,14 +103,14 @@ impl Manager {
             }
         }
 
-        notification::new_encrypted(&encrypted.device.device).send();
+        Notifier::notify(Notice::NewEncrypted(&encrypted.device.device));
 
         if let Some(encrypted_config) = self.config.get_uuid_settings(&encrypted.device.uuid.as_ref().unwrap()) {
             match encrypted.unlock(&encrypted_config.keyfile, &encrypted_config.password) {
-                Ok(path) => {notification::decrypted(&path).send();},
+                Ok(path) => {Notifier::notify(Notice::DecryptSuccess(&path));},
                 Err(e) => {
                     eprintln!("{}", e);
-                    notification::decryption_failed(&e.to_string()).send();
+                    Notifier::notify(Notice::DecryptFail(&e.to_string()));
                 }
             }
         }
@@ -127,8 +130,8 @@ impl Manager {
                 return;
             }
         }
-
-        notification::new_filesystem(&filesystem.device.device).send();
+ 
+        Notifier::notify(Notice::NewFilesystem(&filesystem.device.device));
 
         match self.config.get_uuid_settings(&filesystem.device.uuid.as_ref().unwrap()) {
             Some(filesystem_config) => {
@@ -137,7 +140,7 @@ impl Manager {
                 if should_mount {
                     match filesystem.mount() {
                         Ok(mount_path) => {
-                            notification::mounted(&mount_path).send();
+                            Notifier::notify(Notice::MountSuccess(&mount_path));
 
                             if let Some(command) = &filesystem_config.command {
                                 if std::path::Path::new(command).exists() {
@@ -147,7 +150,7 @@ impl Manager {
                         },
                         Err(e) => {
                             eprintln!("{:#?}", e);
-                            notification::mount_failed(&filesystem.device.device).send();
+                            Notifier::notify(Notice::MountFail(&filesystem.device.device));
                         }
                     }
                 }
@@ -155,9 +158,9 @@ impl Manager {
             None => {
                 if self.config.settings.automount {
                     if let Ok(mount_path) = filesystem.mount() {
-                        notification::mounted(&mount_path).send();
+                        Notifier::notify(Notice::MountSuccess(&mount_path));
                     } else {
-                        notification::mount_failed(&filesystem.device.uuid.unwrap_or_default()).send();
+                        Notifier::notify(Notice::MountFail(&filesystem.device.uuid.unwrap_or_default()));
                     }
                 }
             }
@@ -167,7 +170,7 @@ impl Manager {
     pub fn removed_object(&mut self, object_path: String) {
         if let Some(device) = self.devices.remove(&object_path) {
             if let Some(filesystem) = device.as_fs() {
-                notification::unmounted(&filesystem.device.device).send();
+                Notifier::notify(Notice::UnmountSuccess(&filesystem.device.device));
             }
         }
     }
