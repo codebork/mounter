@@ -173,10 +173,10 @@ pub trait UDisks2Block {
     fn update_configuration_item(&self, old_item: (&str, ::std::collections::HashMap<&str, arg::Variant<Box<dyn arg::RefArg>>>), new_item: (&str, ::std::collections::HashMap<&str, arg::Variant<Box<dyn arg::RefArg>>>), options: ::std::collections::HashMap<&str, arg::Variant<Box<dyn arg::RefArg>>>) -> Result<(), dbus::Error>;
     fn get_secret_configuration(&self, options: ::std::collections::HashMap<&str, arg::Variant<Box<dyn arg::RefArg>>>) -> Result<Vec<(String, ::std::collections::HashMap<String, arg::Variant<Box<dyn arg::RefArg + 'static>>>)>, dbus::Error>;
     fn format(&self, type_: &str, options: ::std::collections::HashMap<&str, arg::Variant<Box<dyn arg::RefArg>>>) -> Result<(), dbus::Error>;
-    fn open_for_backup(&self, options: ::std::collections::HashMap<&str, arg::Variant<Box<dyn arg::RefArg>>>) -> Result<dbus::OwnedFd, dbus::Error>;
-    fn open_for_restore(&self, options: ::std::collections::HashMap<&str, arg::Variant<Box<dyn arg::RefArg>>>) -> Result<dbus::OwnedFd, dbus::Error>;
-    fn open_for_benchmark(&self, options: ::std::collections::HashMap<&str, arg::Variant<Box<dyn arg::RefArg>>>) -> Result<dbus::OwnedFd, dbus::Error>;
-    fn open_device(&self, mode: &str, options: ::std::collections::HashMap<&str, arg::Variant<Box<dyn arg::RefArg>>>) -> Result<dbus::OwnedFd, dbus::Error>;
+    fn open_for_backup(&self, options: ::std::collections::HashMap<&str, arg::Variant<Box<dyn arg::RefArg>>>) -> Result<dbus::arg::OwnedFd, dbus::Error>;
+    fn open_for_restore(&self, options: ::std::collections::HashMap<&str, arg::Variant<Box<dyn arg::RefArg>>>) -> Result<dbus::arg::OwnedFd, dbus::Error>;
+    fn open_for_benchmark(&self, options: ::std::collections::HashMap<&str, arg::Variant<Box<dyn arg::RefArg>>>) -> Result<dbus::arg::OwnedFd, dbus::Error>;
+    fn open_device(&self, mode: &str, options: ::std::collections::HashMap<&str, arg::Variant<Box<dyn arg::RefArg>>>) -> Result<dbus::arg::OwnedFd, dbus::Error>;
     fn rescan(&self, options: ::std::collections::HashMap<&str, arg::Variant<Box<dyn arg::RefArg>>>) -> Result<(), dbus::Error>;
     fn get_device(&self) -> Result<Vec<u8>, dbus::Error>;
     fn get_preferred_device(&self) -> Result<Vec<u8>, dbus::Error>;
@@ -228,24 +228,24 @@ impl<'a, C: ::std::ops::Deref<Target=blocking::Connection>> UDisks2Block for blo
         self.method_call("org.freedesktop.UDisks2.Block", "Format", (type_, options, ))
     }
 
-    fn open_for_backup(&self, options: ::std::collections::HashMap<&str, arg::Variant<Box<dyn arg::RefArg>>>) -> Result<dbus::OwnedFd, dbus::Error> {
+    fn open_for_backup(&self, options: ::std::collections::HashMap<&str, arg::Variant<Box<dyn arg::RefArg>>>) -> Result<dbus::arg::OwnedFd, dbus::Error> {
         self.method_call("org.freedesktop.UDisks2.Block", "OpenForBackup", (options, ))
-            .and_then(|r: (dbus::OwnedFd,)| Ok(r.0))
+            .and_then(|r: (dbus::arg::OwnedFd,)| Ok(r.0))
     }
 
-    fn open_for_restore(&self, options: ::std::collections::HashMap<&str, arg::Variant<Box<dyn arg::RefArg>>>) -> Result<dbus::OwnedFd, dbus::Error> {
+    fn open_for_restore(&self, options: ::std::collections::HashMap<&str, arg::Variant<Box<dyn arg::RefArg>>>) -> Result<dbus::arg::OwnedFd, dbus::Error> {
         self.method_call("org.freedesktop.UDisks2.Block", "OpenForRestore", (options, ))
-            .and_then(|r: (dbus::OwnedFd,)| Ok(r.0))
+            .and_then(|r: (dbus::arg::OwnedFd,)| Ok(r.0))
     }
 
-    fn open_for_benchmark(&self, options: ::std::collections::HashMap<&str, arg::Variant<Box<dyn arg::RefArg>>>) -> Result<dbus::OwnedFd, dbus::Error> {
+    fn open_for_benchmark(&self, options: ::std::collections::HashMap<&str, arg::Variant<Box<dyn arg::RefArg>>>) -> Result<dbus::arg::OwnedFd, dbus::Error> {
         self.method_call("org.freedesktop.UDisks2.Block", "OpenForBenchmark", (options, ))
-            .and_then(|r: (dbus::OwnedFd,)| Ok(r.0))
+            .and_then(|r: (dbus::arg::OwnedFd,)| Ok(r.0))
     }
 
-    fn open_device(&self, mode: &str, options: ::std::collections::HashMap<&str, arg::Variant<Box<dyn arg::RefArg>>>) -> Result<dbus::OwnedFd, dbus::Error> {
+    fn open_device(&self, mode: &str, options: ::std::collections::HashMap<&str, arg::Variant<Box<dyn arg::RefArg>>>) -> Result<dbus::arg::OwnedFd, dbus::Error> {
         self.method_call("org.freedesktop.UDisks2.Block", "OpenDevice", (mode, options, ))
-            .and_then(|r: (dbus::OwnedFd,)| Ok(r.0))
+            .and_then(|r: (dbus::arg::OwnedFd,)| Ok(r.0))
     }
 
     fn rescan(&self, options: ::std::collections::HashMap<&str, arg::Variant<Box<dyn arg::RefArg>>>) -> Result<(), dbus::Error> {

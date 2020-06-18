@@ -14,6 +14,9 @@ impl<'a> Notifiable for Notice<'a> {
     fn as_notification(self) -> Notification {
         let mut notification = Notification::default();
 
+        notification.set_app_name("Mounter");
+        notification.set_expire_timeout(-1);
+
         match self {
             Self::NewFilesystem(msg) => {
                 notification.set_summary("New filesystem found");

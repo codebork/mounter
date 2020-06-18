@@ -1,8 +1,8 @@
 use dbus::strings::Path;
 use dbus::arg::{Variant, RefArg};
 use crate::udisks2::Udisks2InterfacesAndProps;
-use crate::udisks2::{Interface, Filesystem, Encrypted};
-
+use crate::udisks2::Interface;
+use super::{Filesystem, Encrypted};
 
 #[derive(Clone, Debug, Default)]
 pub struct Block {

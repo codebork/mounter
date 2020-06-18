@@ -1,7 +1,8 @@
 use dbus::blocking::Connection;
 use std::time::Duration;
 use std::rc::Rc;
-use crate::udisks2::{udisks2_dbus, drive::Drive, block::Block};
+use super::dbus_interface;
+use crate::udisks2::devices::{Drive, Block};
 
 pub struct Listener {
     drive_added: Rc<Option<Box<dyn Fn(Drive)>>>,
@@ -43,7 +44,7 @@ impl Listener {
         let block_device_added = Rc::clone(&self.block_device_added);
         let object_removed = Rc::clone(&self.object_removed);
 
-        proxy.match_signal(move |signal: udisks2_dbus::OrgFreedesktopDBusObjectManagerInterfacesAdded, _conn: &Connection| {
+        proxy.match_signal(move |signal: dbus_interface::OrgFreedesktopDBusObjectManagerInterfacesAdded, _conn: &Connection| {
             if let Some(drive) = Drive::new(&signal.object_path, &signal.interfaces_and_properties) {
                 if let Some(new_drive_handler) = &*drive_added {
                     new_drive_handler(drive);
@@ -59,7 +60,7 @@ impl Listener {
             true
         }).expect("Could not listen for Interfaces Added signal");
 
-        proxy.match_signal(move |signal: udisks2_dbus::OrgFreedesktopDBusObjectManagerInterfacesRemoved, _conn: &Connection| {
+        proxy.match_signal(move |signal: dbus_interface::OrgFreedesktopDBusObjectManagerInterfacesRemoved, _conn: &Connection| {
             if let Some(removed_object_handler) = &*object_removed {
                 removed_object_handler(signal.object_path.to_string());
             }
