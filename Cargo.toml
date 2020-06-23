@@ -9,3 +9,4 @@ dbus = "0.7.0"
 toml = "0.5.5"
 serde = { version = "1.0.103", features = ["derive"] }
 xdg = "2.2.0"
+dialog = "0.3.0"

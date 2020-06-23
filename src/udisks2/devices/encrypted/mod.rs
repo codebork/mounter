@@ -12,10 +12,9 @@ pub struct Encrypted {
 }
 
 impl Encrypted {
-    pub fn unlock(&self, keyfile: &Option<String>, password: &Option<String>) -> Result<String, MounterError> {
+    pub fn unlock(&self, keyfile: Option<String>, password: Option<String>) -> Result<String, MounterError> {
         let conn = Connection::new_system().expect("Could not connect to system bus");
         let proxy = conn.with_proxy("org.freedesktop.UDisks2", &self.device.object_path, std::time::Duration::from_millis(5000));
-        let mut options: HashMap<&str, Variant<Box<dyn RefArg>>> = HashMap::new();
 
         if let Some(keyfile_path) = keyfile {
             std::fs::read(keyfile_path).map_or_else(
@@ -23,6 +22,7 @@ impl Encrypted {
                     Err(MounterError::UnreadableKeyFile(e))
                 },
                 |bytes| {
+                    let mut options: HashMap<&str, Variant<Box<dyn RefArg>>> = HashMap::new();
                     options.insert("keyfile_contents", Variant(Box::new(bytes)));
                     proxy.unlock(
                         "",
@@ -39,8 +39,8 @@ impl Encrypted {
             )
         } else if let Some(password) = password {
             proxy.unlock(
-                password,
-                options
+                &password,
+                HashMap::new()
             ).map_or_else(
                 |e| {
                     Err(MounterError::UnlockFailed(e))
@@ -53,5 +53,6 @@ impl Encrypted {
             Err(MounterError::NoKeyProvided)
         }
     }
+
 }
 

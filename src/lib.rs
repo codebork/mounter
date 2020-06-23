@@ -5,7 +5,7 @@ mod notices;
 mod notifications;
 mod manager;
 pub use config::Config;
-use manager::Manager;
+pub use manager::Manager;
 use udisks2::devices::{Block, Drive};
 
 pub fn run(config: Config) -> Result<(), Box<dyn std::error::Error>> {
