@@ -1,7 +1,7 @@
 [package]
-name = "mounter"
+name = "udman"
 version = "0.1.0"
-authors = ["Callum Gaskell <callum.gaskell@gmail.com>"]
+authors = ["Callum Gaskell <chat@callumgaskell.com>"]
 edition = "2018"
 
 [dependencies]

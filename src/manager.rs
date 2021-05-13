@@ -5,6 +5,7 @@ use super::notices::Notice;
 use super::config::Config;
 use dialog::DialogBox;
 
+/// Keeps track of and controls devices and drives
 #[derive(Debug)]
 pub struct Manager {
     config: Config,
@@ -13,6 +14,9 @@ pub struct Manager {
 }
 
 impl Manager {
+    /// Create a new instance of manager with the specified configuration.
+    /// Initial UDisks2 state can be passed in also this allows udman to keep
+    /// track of devices that were attached before the program started running.
     pub fn new(config: Config, initial_state: Option<Udisks2ManagedObjects>) -> Manager {
         let mut new_manager = Manager {
             config: config,
@@ -50,10 +54,12 @@ impl Manager {
         }
     }
 
+    /// Inserts a new drive object into the list of monitored drives
     pub fn new_drive(&mut self, drive: Drive) {
         self.drives.insert(drive.object_path.to_string(), drive.to_owned());
     }
 
+    /// Inserts a new block device object into the list of monitored drives
     pub fn new_device(&mut self, device: Block) {
         self.devices.insert(device.object_path.to_string(), device.to_owned());
 
@@ -126,7 +132,7 @@ impl Manager {
 
         if let Some(fs_config) = self.config.get_uuid_settings(&filesystem.device.uuid.as_ref().unwrap()) {
             should_mount = fs_config.automount;
-            script = fs_config.command.to_owned();
+            script = fs_config.run.to_owned();
         }
 
         if should_mount.unwrap_or(self.config.settings.automount) {
@@ -148,6 +154,8 @@ impl Manager {
         }
     }
 
+    /// Removes devices from memory. If the removed device was a filesystem
+    /// then a notification is sent with information
     pub fn removed_object(&mut self, object_path: String) {
         if let Some(device) = self.devices.remove(&object_path) {
             if let Some(filesystem) = device.as_fs() {

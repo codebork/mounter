@@ -1,13 +1,18 @@
+#![warn(missing_docs)]
+
+//! A utility that manages automounting of drives using UDisks2
+
 mod udisks2;
 mod err;
 mod config;
 mod notices;
 mod notifications;
 mod manager;
-pub use config::Config;
 pub use manager::Manager;
+pub use config::{Config, Settings, FsSettings};
 use udisks2::devices::{Block, Drive};
 
+/// Sets up a listener and starts listening for device events
 pub fn run(config: Config) -> Result<(), Box<dyn std::error::Error>> {
     let mut udisks2_listener = udisks2::Listener::new();
     let manager = std::rc::Rc::new(std::cell::RefCell::new(Manager::new(config, udisks2::current_state().ok())));
